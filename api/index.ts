@@ -15,26 +15,32 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ): Promise<void> {
+  // Vercel rewrites strip /api prefix, so we check the raw URL path
+  // req.url in Vercel serverless contains the full path including /api
   const url = req.url || '';
 
-  // Route: /api/files/:folder
-  if (url.includes('/api/files/')) {
+  // Debug log for troubleshooting
+  console.log('Request URL:', url);
+  console.log('Request method:', req.method);
+
+  // Route: /api/files/:folder or /files/:folder (after rewrite)
+  if (url.includes('/files/') || url.includes('/api/files/')) {
     return getFilesHandler(req, res);
   }
 
-  // Route: /api/file/:fileId
-  if (url.includes('/api/file/')) {
+  // Route: /api/file/:fileId or /file/:fileId
+  if (url.includes('/file/') || url.includes('/api/file/')) {
     return getFileHandler(req, res);
   }
 
-  // Route: /api/download/:fileId (single file download)
-  if (url.includes('/api/download/') && !url.includes('/api/download/bulk')) {
-    return downloadSingleFileHandler(req, res);
+  // Route: /api/download/bulk or /download/bulk (must check before single download)
+  if (url.includes('/download/bulk') || url.includes('/api/download/bulk')) {
+    return downloadBulkHandler(req, res);
   }
 
-  // Route: /api/download/bulk (bulk download as zip)
-  if (url.includes('/api/download/bulk')) {
-    return downloadBulkHandler(req, res);
+  // Route: /api/download/:fileId or /download/:fileId (single file download)
+  if (url.includes('/download/') || url.includes('/api/download/')) {
+    return downloadSingleFileHandler(req, res);
   }
 
   res.status(404).json({ success: false, error: 'Not found' });
