@@ -1,4 +1,7 @@
 {
+  "buildCommand": "cd client && npm install && npm run build",
+  "outputDirectory": "client/dist",
+  "installCommand": "npm install",
   "functions": {
     "api/index.ts": {
       "maxDuration": 60
@@ -8,6 +11,10 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/index.ts"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/client/dist/$1"
     }
   ]
 }
