@@ -40,12 +40,20 @@ export interface UseDriveFilesEnhancedResult extends UseDriveFilesResult {
   filter: FilterType;
 }
 
+// Map frontend folder names to API folder names (lowercase)
+const FOLDER_TO_API: Record<FolderType, string> = {
+  'Canon': 'canon',
+  'DJI': 'dji',
+  'ipong': 'ipong',
+  'Sony': 'sony',
+};
+
 export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnhancedResult {
   const [allFiles, setAllFiles] = useState<DriveFile[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [folder, setFolder] = useState<FolderType | undefined>(undefined);
+  const [folder, setFolder] = useState<FolderType | undefined>('Canon'); // Default to Canon
   const [filter, setFilter] = useState<FilterType>('all');
 
   // Use selection hook for centralized selection logic
@@ -56,7 +64,15 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/files');
+      // Must have a folder selected to fetch
+      if (!folder) {
+        setAllFiles([]);
+        setLoading(false);
+        return;
+      }
+
+      const apiFolder = FOLDER_TO_API[folder];
+      const response = await fetch(`/api/files/${apiFolder}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch files: ${response.status} ${response.statusText}`);
       }
@@ -93,7 +109,7 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [folder]);
 
   useEffect(() => {
     fetchFiles();
@@ -103,7 +119,7 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
   useEffect(() => {
     let result = allFiles;
 
-    // Filter by folder if selected
+    // Filter by folder if selected (already done by API, but keep for safety)
     if (folder) {
       result = result.filter(file =>
         file.name.toLowerCase().includes(folder.toLowerCase())

@@ -16,4 +16,6 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
   },
+  // For Vercel deployment - use relative API paths
+  base: '/',
 });
