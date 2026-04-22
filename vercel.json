@@ -1,6 +1,9 @@
 {
-  "framework": "vite",
-  "installCommand": "cd api && npm install",
-  "buildCommand": "cd client && npm install && npm run build",
-  "outputDirectory": "client/dist"
+  "version": 2,
+  "builds": [
+    { "src": "api/files/[folder].ts", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/files", "dest": "api/files/[folder].ts" }
+  ]
 }
