@@ -2,6 +2,7 @@
   "framework": "vite",
   "buildCommand": "cd client && npm run build",
   "installCommand": "cd api && npm install",
+  "outputDirectory": "client/dist",
   "rewrites": [
     { "source": "/api/files", "destination": "api/files/[folder].ts" },
     { "source": "/(.*)", "destination": "/client/dist/index.html" }
