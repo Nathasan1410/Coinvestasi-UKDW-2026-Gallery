@@ -79,10 +79,10 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
 
       const data = await response.json();
 
-      // Handle both { success: true, data: [...] } and direct array responses
+      // API returns { success: true, data: { items: [...] } }
       const filesArray: ApiFile[] = Array.isArray(data)
         ? data
-        : data.data ?? data.files ?? [];
+        : data.data?.items ?? [];
 
       // Transform to DriveFile (keep all media types now)
       const driveFiles: DriveFile[] = filesArray.map(file => ({
@@ -118,13 +118,6 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
   // Apply folder and filter changes to update displayed files
   useEffect(() => {
     let result = allFiles;
-
-    // Filter by folder if selected (already done by API, but keep for safety)
-    if (folder) {
-      result = result.filter(file =>
-        file.name.toLowerCase().includes(folder.toLowerCase())
-      );
-    }
 
     // Filter by media type
     if (filter && filter !== 'all') {

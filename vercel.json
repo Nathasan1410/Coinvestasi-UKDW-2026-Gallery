@@ -1,4 +1,8 @@
 {
-  "buildCommand": "npm install && npm install --prefix api && npm run build:client && cp -r client/dist/* .",
-  "installCommand": "npm install && npm install --prefix api"
+  "installCommand": "npm install && cd api && npm install",
+  "buildCommand": "cd client && npm install && npm run build",
+  "rewrites": [
+    { "source": "/api/files/:folder", "destination": "/api/index.ts" },
+    { "source": "/api/download/:fileId", "destination": "/api/index.ts" }
+  ]
 }

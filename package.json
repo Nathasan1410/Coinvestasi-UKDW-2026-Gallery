@@ -2,20 +2,18 @@
   "name": "gdrive-gallery",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "build:server": "cd server && npm run build",
-    "build:client": "cd client && npm run build"
+    "build:client": "cd client && npm run build",
+    "dev": "npm run dev:client",
+    "dev:client": "cd client && npm run dev"
   },
   "dependencies": {
-    "@googleapis/drive": "^8.14.0",
-    "googleapis-common": "^8.0.1",
-    "jszip": "^3.10.1"
+    "@googleapis/drive": "^8.14.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^22.13.9",
     "@vercel/node": "^5.7.12",
-    "typescript": "^5.3.3"
+    "typescript": "^5.7.3"
   }
 }

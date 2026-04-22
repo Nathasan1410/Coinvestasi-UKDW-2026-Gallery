@@ -2,11 +2,9 @@
   "name": "api",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
   "dependencies": {
     "@googleapis/drive": "^8.14.0",
-    "googleapis-common": "^8.0.1",
-    "jszip": "^3.10.1",
-    "@vercel/node": "^5.7.12"
+    "@vercel/node": "^5.7.12",
+    "archiver": "^7.0.1"
   }
 }

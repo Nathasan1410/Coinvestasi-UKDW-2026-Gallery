@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { drive } from '@googleapis/drive';
+import archiver from 'archiver';
 
 const DRIVE_API_KEY = process.env.GOOGLE_API_KEY;
 
@@ -12,7 +13,6 @@ const driveClient = drive({
   auth: DRIVE_API_KEY,
 });
 
-// Folder ID mapping
 const FOLDER_IDS: Record<string, string> = {
   canon: process.env.FOLDER_CANON || '',
   dji: process.env.FOLDER_DJI || '',
@@ -30,7 +30,6 @@ interface FileMetadata {
   size?: string;
 }
 
-// Security utilities
 const DRIVE_FILE_ID_REGEX = /^[a-zA-Z0-9_-]{20,50}$/;
 
 function isValidDriveFileId(fileId: string): boolean {
@@ -44,6 +43,26 @@ function setSecurityHeaders(res: VercelResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+interface RouteHandler {
+  pattern: RegExp;
+  paramNames: string[];
+  handler: (req: VercelRequest, res: VercelResponse, params: Record<string, string>) => Promise<void>;
+}
+
+function matchRoute(url: string, routes: RouteHandler[]): { params: Record<string, string>; handler: RouteHandler['handler'] } | null {
+  for (const route of routes) {
+    const match = route.pattern.exec(url);
+    if (match) {
+      const params: Record<string, string> = {};
+      route.paramNames.forEach((name, i) => {
+        params[name] = match[i + 1];
+      });
+      return { params, handler: route.handler };
+    }
+  }
+  return null;
 }
 
 async function listFilesFromFolder(folderId: string, pageSize: number = 100) {
@@ -65,8 +84,7 @@ async function getFileStream(fileId: string) {
   return { stream: response.data, mimeType: response.headers['content-type'] || 'application/octet-stream' };
 }
 
-// Handlers
-async function handleFiles(req: VercelRequest, res: VercelResponse) {
+async function handleFiles(req: VercelRequest, res: VercelResponse, { folder }: Record<string, string>) {
   setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
@@ -78,13 +96,6 @@ async function handleFiles(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ success: false, error: 'Method not allowed' });
     return;
   }
-
-  // Extract folder from URL: /api/files/:folder
-  const urlParts = req.url?.split('/') || [];
-  const folderIndex = urlParts.findIndex(p => p === 'files');
-  const folder = folderIndex >= 0 && urlParts.length > folderIndex + 1
-    ? urlParts[folderIndex + 1]
-    : undefined;
 
   if (!folder || !(folder in FOLDER_IDS)) {
     res.status(400).json({
@@ -109,7 +120,7 @@ async function handleFiles(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-async function handleDownload(req: VercelRequest, res: VercelResponse) {
+async function handleDownload(req: VercelRequest, res: VercelResponse, { fileId }: Record<string, string>) {
   setSecurityHeaders(res);
 
   if (req.method === 'OPTIONS') {
@@ -121,13 +132,6 @@ async function handleDownload(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ success: false, error: 'Method not allowed' });
     return;
   }
-
-  // Extract fileId from URL: /api/download/:fileId
-  const urlParts = req.url?.split('/') || [];
-  const downloadIndex = urlParts.findIndex(p => p === 'download');
-  const fileId = downloadIndex >= 0 && urlParts.length > downloadIndex + 1
-    ? urlParts[downloadIndex + 1]
-    : undefined;
 
   if (!fileId || !isValidDriveFileId(fileId)) {
     res.status(400).json({ success: false, error: 'Invalid file ID format' });
@@ -145,18 +149,78 @@ async function handleDownload(req: VercelRequest, res: VercelResponse) {
   }
 }
 
-// Main handler
+async function handleBulkDownload(req: VercelRequest, res: VercelResponse) {
+  setSecurityHeaders(res);
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ success: false, error: 'Method not allowed' });
+    return;
+  }
+
+  let fileIds: string[];
+  try {
+    const body = req.body;
+    if (!body || !Array.isArray(body.fileIds) || body.fileIds.length === 0) {
+      res.status(400).json({ success: false, error: 'fileIds array is required' });
+      return;
+    }
+    fileIds = body.fileIds;
+    if (!fileIds.every(isValidDriveFileId)) {
+      res.status(400).json({ success: false, error: 'Invalid file ID format' });
+      return;
+    }
+  } catch {
+    res.status(400).json({ success: false, error: 'Invalid request body' });
+    return;
+  }
+
+  try {
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', 'attachment; filename="download.zip"');
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(res);
+
+    for (const fileId of fileIds) {
+      try {
+        const { stream } = await getFileStream(fileId);
+        archive.append(stream, { name: `${fileId}`, mode: 0o400 });
+      } catch (error) {
+        console.error(`Error adding file ${fileId} to archive:`, error);
+      }
+    }
+
+    archive.finalize();
+  } catch (error) {
+    console.error('Error creating bulk download archive:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: error instanceof Error ? error.message : 'Failed to create archive' });
+    }
+  }
+}
+
+const ROUTES: RouteHandler[] = [
+  { pattern: /^\/api\/files\/([a-zA-Z0-9_-]+)\/?$/, paramNames: ['folder'], handler: handleFiles },
+  { pattern: /^\/api\/download\/([a-zA-Z0-9_-]{20,50})\/?$/, paramNames: ['fileId'], handler: handleDownload },
+  { pattern: /^\/api\/download\/bulk\/?$/, paramNames: [], handler: handleBulkDownload as RouteHandler['handler'] },
+];
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const url = req.url || '';
 
   console.log('Request:', req.method, url);
 
-  if (url.includes('/files/')) {
-    return handleFiles(req, res);
-  }
+  setSecurityHeaders(res);
 
-  if (url.includes('/download/')) {
-    return handleDownload(req, res);
+  const routeMatch = matchRoute(url, ROUTES);
+  if (routeMatch) {
+    await routeMatch.handler(req, res, routeMatch.params);
+    return;
   }
 
   res.status(404).json({ success: false, error: 'Not found' });
