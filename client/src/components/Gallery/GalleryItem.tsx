@@ -73,9 +73,9 @@ export function GalleryItem({
   const localRef = useRef<HTMLDivElement>(null);
   const itemRef = focusRef || localRef;
 
-  // Get image URL - prefer webContentLink for direct access
+  // Get image URL - prefer thumbnailLink for gallery display, then webContentLink
   const getImageUrl = (): string => {
-    return file.webContentLink || file.thumbnailLink || file.webViewLink || '';
+    return file.thumbnailLink || file.webContentLink || file.webViewLink || '';
   };
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
