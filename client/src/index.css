@@ -119,6 +119,7 @@ body {
 
 .masonry-item {
   position: relative;
+  overflow: hidden;
 }
 
 /* Gallery Item */

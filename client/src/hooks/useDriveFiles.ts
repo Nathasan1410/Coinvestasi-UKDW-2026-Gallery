@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DriveFile, UseDriveFilesResult } from '../types/gallery';
 import { matchesFilter, type FilterType } from '../utils/fileUtils';
 import type { FolderType } from '../components/Tabs/FolderTabs';
@@ -19,28 +19,17 @@ interface ApiFile {
   folder?: string;
 }
 
-/**
- * Custom hook to fetch and manage Drive files
- */
-export interface UseDriveFilesOptions {
-  /** Selected folder to filter by */
-  folder?: FolderType;
-  /** Media type filter */
-  filter?: FilterType;
+interface ApiResponse {
+  success: boolean;
+  data?: {
+    items: ApiFile[];
+    nextPageToken?: string;
+  };
+  error?: string;
 }
 
-export interface UseDriveFilesEnhancedResult extends UseDriveFilesResult {
-  /** Set the selected folder */
-  setFolder: (folder: FolderType) => void;
-  /** Set the media filter */
-  setFilter: (filter: FilterType) => void;
-  /** Current selected folder */
-  folder: FolderType | undefined;
-  /** Current media filter */
-  filter: FilterType;
-}
+const PAGE_SIZE = 50;
 
-// Map frontend folder names to API folder names (lowercase)
 const FOLDER_TO_API: Record<FolderType, string> = {
   'Canon': 'canon',
   'DJI': 'dji',
@@ -48,58 +37,90 @@ const FOLDER_TO_API: Record<FolderType, string> = {
   'Sony': 'sony',
 };
 
+export interface UseDriveFilesOptions {
+  folder?: FolderType;
+  filter?: FilterType;
+}
+
+export interface UseDriveFilesEnhancedResult extends UseDriveFilesResult {
+  setFolder: (folder: FolderType) => void;
+  setFilter: (filter: FilterType) => void;
+  folder: FolderType | undefined;
+  filter: FilterType;
+  loadMore: () => Promise<void>;
+  hasMore: boolean;
+  loadingMore: boolean;
+}
+
+function mapApiFiles(filesArray: ApiFile[]): DriveFile[] {
+  return filesArray.map(file => ({
+    id: file.id,
+    name: file.name,
+    mimeType: file.mimeType,
+    thumbnailLink: file.thumbnailLink,
+    webViewLink: file.webViewLink,
+    webContentLink: file.webContentLink,
+    size: file.size,
+    createdTime: file.createdTime,
+    modifiedTime: file.modifiedTime,
+    width: file.width,
+    height: file.height,
+  }));
+}
+
 export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnhancedResult {
   const [allFiles, setAllFiles] = useState<DriveFile[]>([]);
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [folder, setFolder] = useState<FolderType | undefined>('Canon'); // Default to Canon
+  const [folder, setFolder] = useState<FolderType | undefined>('Canon');
   const [filter, setFilter] = useState<FilterType>('all');
+  const [pageToken, setPageToken] = useState<string | undefined>();
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // Use selection hook for centralized selection logic
   const selection = useSelection();
 
-  const fetchFiles = useCallback(async () => {
+  const fetchFiles = useCallback(async (isInitial = true) => {
+    if (!folder) {
+      setAllFiles([]);
+      setLoading(false);
+      return;
+    }
+
     try {
-      setLoading(true);
+      if (isInitial) {
+        setLoading(true);
+      }
       setError(null);
 
-      // Must have a folder selected to fetch
-      if (!folder) {
-        setAllFiles([]);
-        setLoading(false);
-        return;
-      }
-
       const apiFolder = FOLDER_TO_API[folder];
-      const response = await fetch(`/api/files?folder=${apiFolder}`);
+      const url = `/api/files?folder=${apiFolder}&pageSize=${PAGE_SIZE}${pageToken ? `&pageToken=${pageToken}` : ''}`;
+
+      const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`Failed to fetch files: ${response.status} ${response.statusText}`);
       }
 
-      const data = await response.json();
+      const data: ApiResponse = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || 'API request failed');
+      }
 
-      // API returns { success: true, data: { items: [...] } }
-      const filesArray: ApiFile[] = Array.isArray(data)
-        ? data
-        : data.data?.items ?? [];
+      const filesArray: ApiFile[] = data.data?.items ?? [];
+      const nextToken = data.data?.nextPageToken;
 
-      // Transform to DriveFile (keep all media types now)
-      const driveFiles: DriveFile[] = filesArray.map(file => ({
-        id: file.id,
-        name: file.name,
-        mimeType: file.mimeType,
-        thumbnailLink: file.thumbnailLink,
-        webViewLink: file.webViewLink,
-        webContentLink: file.webContentLink,
-        size: file.size,
-        createdTime: file.createdTime,
-        modifiedTime: file.modifiedTime,
-        width: file.width,
-        height: file.height,
-      }));
+      const driveFiles = mapApiFiles(filesArray);
 
-      setAllFiles(driveFiles);
+      if (isInitial) {
+        setAllFiles(driveFiles);
+        setPageToken(undefined);
+      } else {
+        setAllFiles(prev => [...prev, ...driveFiles]);
+      }
+
+      setHasMore(!!nextToken);
+      setPageToken(nextToken);
     } catch (err) {
       const errorMessage = err instanceof Error
         ? err.message
@@ -108,18 +129,23 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
       console.error('Error fetching files:', err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
+  }, [folder, pageToken]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    await fetchFiles(false);
+  }, [loadingMore, hasMore, fetchFiles]);
+
+  useEffect(() => {
+    fetchFiles(true);
   }, [folder]);
 
   useEffect(() => {
-    fetchFiles();
-  }, [fetchFiles]);
-
-  // Apply folder and filter changes to update displayed files
-  useEffect(() => {
     let result = allFiles;
 
-    // Filter by media type
     if (filter && filter !== 'all') {
       result = result.filter(file =>
         matchesFilter(file.mimeType, file.name, filter)
@@ -127,14 +153,7 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
     }
 
     setFiles(result);
-  }, [allFiles, folder, filter]);
-
-  // Sync selection when files change (e.g., filter/folder change)
-  useEffect(() => {
-    // Optional: clear selection when filtered files change
-    // Uncomment if you want to clear selection on filter change
-    // selection.clearSelection();
-  }, [files.length]);
+  }, [allFiles, filter]);
 
   return {
     files,
@@ -144,10 +163,13 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
     toggleSelection: selection.toggleSelection,
     selectAll: () => selection.selectAll(files.map(f => f.id)),
     clearSelection: selection.clearSelection,
-    refresh: fetchFiles,
+    refresh: () => fetchFiles(true),
     setFolder,
     setFilter,
     folder,
     filter,
+    loadMore,
+    hasMore,
+    loadingMore,
   };
 }

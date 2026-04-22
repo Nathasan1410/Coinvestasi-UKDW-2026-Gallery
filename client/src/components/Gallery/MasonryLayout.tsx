@@ -30,7 +30,6 @@ export function MasonryLayout({
   const [columnPositions, setColumnPositions] = useState<ColumnPosition[]>([]);
   const [imageHeights, setImageHeights] = useState<number[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const imageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // Calculate responsive column count based on container width
   useEffect(() => {
@@ -62,13 +61,10 @@ export function MasonryLayout({
     const columnHeights = new Array(cols).fill(0);
 
     heights.forEach((height) => {
-      // Find the shortest column
       const column = columnHeights.indexOf(Math.min(...columnHeights));
       const top = columnHeights[column];
 
       positions.push({ column, top });
-
-      // Update column height
       columnHeights[column] += height + gap;
     });
 
@@ -79,7 +75,6 @@ export function MasonryLayout({
   const handleImageLoad = useCallback((index: number, naturalWidth: number, naturalHeight: number) => {
     setImageHeights(prev => {
       const newHeights = [...prev];
-      // Calculate height based on column width (accounting for gaps)
       if (containerRef.current) {
         const containerWidth = containerRef.current.offsetWidth;
         const columnWidth = (containerWidth - gap * (columnCount - 1)) / columnCount;
@@ -117,6 +112,9 @@ export function MasonryLayout({
   if (useAbsolutePositioning) {
     const maxHeight = Math.max(...columnPositions.map((p, i) => p.top + (imageHeights[i] || 0)), 0);
 
+    const containerWidth = containerRef.current?.offsetWidth || 0;
+    const columnWidth = (containerWidth - gap * (columnCount - 1)) / columnCount;
+
     return (
       <div
         ref={containerRef}
@@ -133,15 +131,17 @@ export function MasonryLayout({
 
           if (!position) return child;
 
+          const left = position.column * (columnWidth + gap);
+          const width = columnWidth;
+
           return (
             <div
-              ref={el => { imageRefs.current[index] = el; }}
               className="masonry-item"
               style={{
                 position: 'absolute',
-                left: `${position.column * (100 / columnCount)}%`,
+                left: `${left}px`,
                 top: `${position.top}px`,
-                width: `calc(${100 / columnCount}% - ${gap * (columnCount - 1) / columnCount}px)`,
+                width: `${width}px`,
                 height: `${height}px`,
               }}
             >
@@ -164,7 +164,6 @@ export function MasonryLayout({
     >
       {React.Children.map(children, (child, index) => (
         <div
-          ref={el => { imageRefs.current[index] = el; }}
           className="masonry-item"
           style={{
             breakInside: 'avoid',

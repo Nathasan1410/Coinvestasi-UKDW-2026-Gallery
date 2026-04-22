@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { MasonryLayout } from './MasonryLayout';
 import { GalleryItem } from './GalleryItem';
 import { useDriveFiles } from '../../hooks/useDriveFiles';
@@ -7,9 +7,6 @@ import { FilterControl, SelectAllControl, DownloadButton } from '../Controls';
 import { VideoLightbox } from '../VideoPlayer';
 import type { DriveFile } from '../../types/gallery';
 
-/**
- * Loading skeleton component for gallery items
- */
 function GallerySkeleton() {
   return (
     <div className="gallery-skeleton">
@@ -19,9 +16,6 @@ function GallerySkeleton() {
   );
 }
 
-/**
- * Error state component
- */
 function GalleryError({ error, onRetry }: { error: string; onRetry: () => void }) {
   return (
     <div className="gallery-error">
@@ -32,9 +26,6 @@ function GalleryError({ error, onRetry }: { error: string; onRetry: () => void }
   );
 }
 
-/**
- * Empty state component
- */
 function GalleryEmpty() {
   return (
     <div className="gallery-empty">
@@ -44,10 +35,44 @@ function GalleryEmpty() {
   );
 }
 
-/**
- * Main Gallery component
- * Fetches files from /api/files and displays them in a masonry layout
- */
+interface LoadMoreSentinelProps {
+  loadingMore: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+}
+
+function LoadMoreSentinel({ loadingMore, hasMore, onLoadMore }: LoadMoreSentinelProps) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          onLoadMore();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, onLoadMore]);
+
+  return (
+    <div ref={sentinelRef} className="load-more-sentinel">
+      {loadingMore && (
+        <div className="loading-more-indicator">
+          <div className="spinner" />
+          <span>Loading more...</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Gallery() {
   const {
     files,
@@ -62,40 +87,36 @@ export function Gallery() {
     setFolder,
     filter,
     setFilter,
+    loadMore,
+    hasMore,
+    loadingMore,
   } = useDriveFiles();
 
-  // Video lightbox state
   const [currentVideoIndex, setCurrentVideoIndex] = useState<number | null>(null);
 
-  // Get filtered video files
   const videoFiles = files.filter(file => file.mimeType.startsWith('video/'));
 
-  // Open video lightbox
   const handleOpenVideoLightbox = (file: DriveFile) => {
     const index = videoFiles.findIndex(f => f.id === file.id);
     setCurrentVideoIndex(index >= 0 ? index : null);
   };
 
-  // Close video lightbox
   const handleCloseVideoLightbox = () => {
     setCurrentVideoIndex(null);
   };
 
-  // Navigate to next video
   const handleNextVideo = () => {
     if (currentVideoIndex !== null && currentVideoIndex < videoFiles.length - 1) {
       setCurrentVideoIndex(currentVideoIndex + 1);
     }
   };
 
-  // Navigate to previous video
   const handlePrevVideo = () => {
     if (currentVideoIndex !== null && currentVideoIndex > 0) {
       setCurrentVideoIndex(currentVideoIndex - 1);
     }
   };
 
-  // Keyboard shortcut: ESC to clear selection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && selectedIds.size > 0) {
@@ -107,7 +128,12 @@ export function Gallery() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedIds.size, clearSelection]);
 
-  // Loading state
+  const handleLoadMore = useCallback(() => {
+    if (!loadingMore && hasMore) {
+      loadMore();
+    }
+  }, [loadingMore, hasMore, loadMore]);
+
   if (loading) {
     return (
       <div className="gallery-container">
@@ -124,7 +150,6 @@ export function Gallery() {
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="gallery-container">
@@ -136,7 +161,6 @@ export function Gallery() {
     );
   }
 
-  // Empty state
   if (files.length === 0) {
     return (
       <div className="gallery-container">
@@ -148,7 +172,6 @@ export function Gallery() {
     );
   }
 
-  // Gallery with items
   return (
     <div className="gallery-container">
       <div className="gallery-header">
@@ -192,7 +215,8 @@ export function Gallery() {
         ))}
       </MasonryLayout>
 
-      {/* Video lightbox modal */}
+      <LoadMoreSentinel loadingMore={loadingMore} hasMore={hasMore} onLoadMore={handleLoadMore} />
+
       {currentVideoIndex !== null && videoFiles[currentVideoIndex] && (
         <VideoLightbox
           file={videoFiles[currentVideoIndex]}
