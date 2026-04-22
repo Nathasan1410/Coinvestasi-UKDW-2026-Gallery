@@ -72,7 +72,7 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
       }
 
       const apiFolder = FOLDER_TO_API[folder];
-      const response = await fetch(`/api/files/${apiFolder}`);
+      const response = await fetch(`/api/files?folder=${apiFolder}`);
       if (!response.ok) {
         throw new Error(`Failed to fetch files: ${response.status} ${response.statusText}`);
       }
