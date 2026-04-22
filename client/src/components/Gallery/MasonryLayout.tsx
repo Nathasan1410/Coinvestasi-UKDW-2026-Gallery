@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 
 interface MasonryLayoutProps {
   children: React.ReactNode[];
@@ -8,16 +8,9 @@ interface MasonryLayoutProps {
   className?: string;
 }
 
-interface ColumnPosition {
-  column: number;
-  top: number;
-}
-
 /**
- * Pinterest-style masonry layout using CSS Grid with JavaScript fallback
- *
- * Uses CSS Grid masonry when supported, falls back to JS column calculation
- * Images maintain their natural aspect ratio without cropping
+ * Simple masonry layout using CSS columns
+ * Each column is a flex column where items flow naturally
  */
 export function MasonryLayout({
   children,
@@ -27,152 +20,52 @@ export function MasonryLayout({
   className = '',
 }: MasonryLayoutProps) {
   const [columnCount, setColumnCount] = useState(columns);
-  const [columnPositions, setColumnPositions] = useState<ColumnPosition[]>([]);
-  const [imageHeights, setImageHeights] = useState<number[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Calculate responsive column count based on container width
   useEffect(() => {
     const calculateColumns = () => {
       if (!containerRef.current) return;
-
       const containerWidth = containerRef.current.offsetWidth;
-      const calculatedColumns = Math.max(
-        1,
-        Math.min(columns, Math.floor(containerWidth / minColumnWidth))
-      );
-
-      setColumnCount(calculatedColumns);
+      const calculated = Math.max(1, Math.min(columns, Math.floor(containerWidth / minColumnWidth)));
+      setColumnCount(calculated);
     };
 
     calculateColumns();
-
-    const resizeObserver = new ResizeObserver(calculateColumns);
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
-    return () => resizeObserver.disconnect();
+    const observer = new ResizeObserver(calculateColumns);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
   }, [columns, minColumnWidth]);
 
-  // Calculate column positions for JavaScript-based masonry
-  const calculatePositions = useCallback((heights: number[], cols: number): ColumnPosition[] => {
-    const positions: ColumnPosition[] = [];
-    const columnHeights = new Array(cols).fill(0);
+  const childArray = React.Children.toArray(children);
 
-    heights.forEach((height) => {
-      const column = columnHeights.indexOf(Math.min(...columnHeights));
-      const top = columnHeights[column];
-
-      positions.push({ column, top });
-      columnHeights[column] += height + gap;
-    });
-
-    return positions;
-  }, [gap]);
-
-  // Handle image load and calculate heights
-  const handleImageLoad = useCallback((index: number, naturalWidth: number, naturalHeight: number) => {
-    setImageHeights(prev => {
-      const newHeights = [...prev];
-      if (containerRef.current) {
-        const containerWidth = containerRef.current.offsetWidth;
-        const columnWidth = (containerWidth - gap * (columnCount - 1)) / columnCount;
-        const aspectRatio = naturalHeight / naturalWidth;
-        newHeights[index] = Math.floor(columnWidth * aspectRatio);
-      }
-      return newHeights;
-    });
-  }, [columnCount, gap]);
-
-  // Recalculate positions when heights or columns change
-  useEffect(() => {
-    const loadedCount = imageHeights.filter(h => h > 0).length;
-    if (loadedCount === children.length && children.length > 0) {
-      const positions = calculatePositions(imageHeights, columnCount);
-      setColumnPositions(positions);
-    }
-  }, [imageHeights, columnCount, children.length, calculatePositions]);
-
-  // CSS Grid masonry (progressive enhancement)
-  const hasCssMasonry = typeof CSS !== 'undefined' &&
-    CSS.supports('grid-template-rows', 'masonry');
-
-  const containerStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: `repeat(${columnCount}, 1fr)`,
-    gridTemplateRows: hasCssMasonry ? 'masonry' : undefined,
-    gap: `${gap}px`,
-    position: 'relative',
-  };
-
-  // If CSS masonry not supported, use absolute positioning
-  const useAbsolutePositioning = !hasCssMasonry && columnPositions.length > 0;
-
-  if (useAbsolutePositioning) {
-    const maxHeight = Math.max(...columnPositions.map((p, i) => p.top + (imageHeights[i] || 0)), 0);
-
-    const containerWidth = containerRef.current?.offsetWidth || 0;
-    const columnWidth = (containerWidth - gap * (columnCount - 1)) / columnCount;
-
-    return (
-      <div
-        ref={containerRef}
-        className={`masonry-container ${className}`}
-        style={{
-          position: 'relative',
-          height: `${maxHeight}px`,
-          width: '100%',
-        }}
-      >
-        {React.Children.map(children, (child, index) => {
-          const position = columnPositions[index];
-          const height = imageHeights[index] || 0;
-
-          if (!position) return child;
-
-          const left = position.column * (columnWidth + gap);
-          const width = columnWidth;
-
-          return (
-            <div
-              className="masonry-item"
-              style={{
-                position: 'absolute',
-                left: `${left}px`,
-                top: `${position.top}px`,
-                width: `${width}px`,
-                height: `${height}px`,
-              }}
-            >
-              {React.cloneElement(child as React.ReactElement, {
-                onImageLoad: (w: number, h: number) => handleImageLoad(index, w, h),
-              })}
-            </div>
-          );
-        })}
-      </div>
-    );
+  const columnArrays: React.ReactNode[][] = [];
+  for (let i = 0; i < columnCount; i++) {
+    columnArrays.push([]);
   }
 
-  // CSS Grid masonry or simple grid fallback
+  childArray.forEach((child, index) => {
+    columnArrays[index % columnCount].push(child);
+  });
+
+  const containerStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: `${gap}px`,
+    width: '100%',
+  };
+
   return (
-    <div
-      ref={containerRef}
-      className={`masonry-container ${className}`}
-      style={containerStyle}
-    >
-      {React.Children.map(children, (child, index) => (
+    <div ref={containerRef} className={`masonry-container ${className}`} style={containerStyle}>
+      {columnArrays.map((colChildren, colIndex) => (
         <div
-          className="masonry-item"
+          key={colIndex}
           style={{
-            breakInside: 'avoid',
-            pageBreakInside: 'avoid',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: `${gap}px`,
           }}
         >
-          {React.cloneElement(child as React.ReactElement, {
-            onImageLoad: (w: number, h: number) => handleImageLoad(index, w, h),
-          })}
+          {colChildren}
         </div>
       ))}
     </div>
