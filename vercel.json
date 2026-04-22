@@ -4,6 +4,7 @@
     { "src": "api/files/[folder].ts", "use": "@vercel/node" }
   ],
   "routes": [
-    { "src": "/api/files", "dest": "api/files/[folder].ts" }
+    { "src": "/api/files", "dest": "api/files/[folder].ts" },
+    { "src": "/(.*)", "dest": "client/dist/$1", "statusCode": 200 }
   ]
 }
