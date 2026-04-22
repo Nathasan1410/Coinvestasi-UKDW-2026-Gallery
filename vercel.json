@@ -1,5 +1,4 @@
 {
-  "buildCommand": "npm install && npm install --prefix api && npm run build:client",
-  "outputDirectory": "client/dist",
+  "buildCommand": "npm install && npm install --prefix api && npm run build:client && cp -r client/dist/* .",
   "installCommand": "npm install && npm install --prefix api"
 }
