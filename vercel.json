@@ -1,9 +1,5 @@
 {
-  "buildCommand": "npm install && cd client && npm install && npm run build",
+  "buildCommand": "npm install && npm install --prefix api && npm run build:client",
   "outputDirectory": "client/dist",
-  "functions": {
-    "api/*.ts": {
-      "maxDuration": 60
-    }
-  }
+  "installCommand": "npm install && npm install --prefix api"
 }
