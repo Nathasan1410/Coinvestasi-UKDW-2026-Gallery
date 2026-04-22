@@ -1,10 +1,6 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "api/files/[folder].ts", "use": "@vercel/node" }
-  ],
-  "routes": [
-    { "src": "/api/files", "dest": "api/files/[folder].ts" },
-    { "src": "/(.*)", "dest": "/client/dist/index.html", "statusCode": 200 }
+  "rewrites": [
+    { "source": "/api/files", "destination": "api/files/[folder].ts" },
+    { "source": "/(.*)", "destination": "/client/dist/index.html" }
   ]
 }
