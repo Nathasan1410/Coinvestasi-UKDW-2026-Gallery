@@ -68,16 +68,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const { folder, pageSize: pageSizeStr, pageToken } = req.query;
+  const { folder: queryFolder, pageSize: pageSizeStr, pageToken } = req.query;
+  const folder = (queryFolder || req.query.folder) as string;
 
-  if (!folder || typeof folder !== 'string' || !(folder in FOLDER_IDS)) {
-    res.status(400).json({ success: false, error: `Invalid folder. Valid: ${Object.keys(FOLDER_IDS).join(', ')}` });
+  console.log('Request for folder:', folder);
+
+  if (!folder || !(folder in FOLDER_IDS)) {
+    console.error('Invalid or missing folder:', folder);
+    res.status(400).json({ 
+      success: false, 
+      error: `Invalid folder: "${folder}". Valid: ${Object.keys(FOLDER_IDS).join(', ')}` 
+    });
     return;
   }
 
   const folderId = FOLDER_IDS[folder];
   if (!folderId) {
-    res.status(500).json({ success: false, error: `Folder ID not configured for: ${folder}` });
+    console.error('Folder ID not configured for:', folder);
+    res.status(500).json({ success: false, error: `Folder ID not configured in environment for: ${folder}` });
     return;
   }
 

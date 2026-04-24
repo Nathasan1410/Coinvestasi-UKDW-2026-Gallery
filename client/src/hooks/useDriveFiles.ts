@@ -103,7 +103,7 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
 
       const apiFolder = FOLDER_TO_API[folder];
       const currentToken = pageTokenRef.current;
-      const url = `/api/files?folder=${apiFolder}&pageSize=${PAGE_SIZE}${currentToken ? `&pageToken=${currentToken}` : ''}`;
+      const url = `/api/files/${apiFolder}?pageSize=${PAGE_SIZE}${currentToken ? `&pageToken=${currentToken}` : ''}`;
 
       const response = await fetch(url);
       if (!response.ok) {

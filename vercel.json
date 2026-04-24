@@ -4,7 +4,7 @@
   "installCommand": "cd api && npm install",
   "outputDirectory": "client/dist",
   "rewrites": [
-    { "source": "/api/files", "destination": "api/files/[folder].ts" },
+    { "source": "/api/files/:folder", "destination": "api/files/[folder].ts" },
     { "source": "/(.*)", "destination": "/client/dist/index.html" }
   ],
   "functions": {
