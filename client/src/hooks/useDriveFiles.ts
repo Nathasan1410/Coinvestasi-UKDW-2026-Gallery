@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DriveFile, UseDriveFilesResult } from '../types/gallery';
-import { matchesFilter, type FilterType } from '../utils/fileUtils';
+import { matchesFilter, type FilterType, getOptimizedImageUrl } from '../utils/fileUtils';
 import type { FolderType } from '../components/Tabs/FolderTabs';
 import { useSelection } from './useSelection';
 
@@ -16,6 +16,7 @@ interface ApiFile {
   modifiedTime?: string;
   width?: number;
   height?: number;
+  duration?: number;
   folder?: string;
 }
 
@@ -28,7 +29,7 @@ interface ApiResponse {
   error?: string;
 }
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 40;
 
 const FOLDER_TO_API: Record<FolderType, string> = {
   'Canon': 'canon',
@@ -57,7 +58,7 @@ function mapApiFiles(filesArray: ApiFile[]): DriveFile[] {
     id: file.id,
     name: file.name,
     mimeType: file.mimeType,
-    thumbnailLink: file.thumbnailLink,
+    thumbnailLink: getOptimizedImageUrl(file.thumbnailLink),
     webViewLink: file.webViewLink,
     webContentLink: file.webContentLink,
     size: file.size,
@@ -65,6 +66,7 @@ function mapApiFiles(filesArray: ApiFile[]): DriveFile[] {
     modifiedTime: file.modifiedTime,
     width: file.width,
     height: file.height,
+    duration: file.duration,
   }));
 }
 
@@ -80,6 +82,8 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
   const [loadingMore, setLoadingMore] = useState(false);
 
   const selection = useSelection();
+  const folderRef = useRef(folder);
+  const pageTokenRef = useRef<string | undefined>(undefined);
 
   const fetchFiles = useCallback(async (isInitial = true) => {
     if (!folder) {
@@ -91,11 +95,15 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
     try {
       if (isInitial) {
         setLoading(true);
+        pageTokenRef.current = undefined;
+      } else {
+        setLoadingMore(true);
       }
       setError(null);
 
       const apiFolder = FOLDER_TO_API[folder];
-      const url = `/api/files?folder=${apiFolder}&pageSize=${PAGE_SIZE}${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const currentToken = pageTokenRef.current;
+      const url = `/api/files?folder=${apiFolder}&pageSize=${PAGE_SIZE}${currentToken ? `&pageToken=${currentToken}` : ''}`;
 
       const response = await fetch(url);
       if (!response.ok) {
@@ -114,13 +122,17 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
 
       if (isInitial) {
         setAllFiles(driveFiles);
-        setPageToken(undefined);
       } else {
-        setAllFiles(prev => [...prev, ...driveFiles]);
+        setAllFiles(prev => {
+          const existingIds = new Set(prev.map(f => f.id));
+          const newFiles = driveFiles.filter(f => !existingIds.has(f.id));
+          return [...prev, ...newFiles];
+        });
       }
 
       setHasMore(!!nextToken);
       setPageToken(nextToken);
+      pageTokenRef.current = nextToken;
     } catch (err) {
       const errorMessage = err instanceof Error
         ? err.message
@@ -131,17 +143,19 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [folder, pageToken]);
+  }, [folder]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || !hasMore) return;
-    setLoadingMore(true);
+    if (loadingMore || !hasMore || loading) return;
     await fetchFiles(false);
-  }, [loadingMore, hasMore, fetchFiles]);
+  }, [loadingMore, hasMore, loading, fetchFiles]);
 
   useEffect(() => {
+    if (folder !== folderRef.current) {
+      folderRef.current = folder;
+    }
     fetchFiles(true);
-  }, [folder]);
+  }, [folder, fetchFiles]);
 
   useEffect(() => {
     let result = allFiles;

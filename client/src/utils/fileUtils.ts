@@ -142,6 +142,20 @@ export function getMediaType(mimeType: string, fileName?: string): 'image' | 'vi
 }
 
 /**
+ * Optimize Google Drive thumbnail URL for better quality and stability
+ * @param thumbnailLink - The original thumbnail link from Drive API
+ * @param size - The desired size (default 1000)
+ * @returns Optimized URL
+ */
+export function getOptimizedImageUrl(thumbnailLink: string | undefined, size: number = 1000): string {
+  if (!thumbnailLink) return '';
+  
+  // Replace the default size (=s220) with the requested size
+  // and ensure it uses high quality scaling (=s1000 or similar)
+  return thumbnailLink.replace(/=s\d+$/, `=s${size}`);
+}
+
+/**
  * Filter type for media filtering
  */
 export type FilterType = 'all' | 'images' | 'videos';

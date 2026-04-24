@@ -6,5 +6,10 @@
   "rewrites": [
     { "source": "/api/files", "destination": "api/files/[folder].ts" },
     { "source": "/(.*)", "destination": "/client/dist/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/files/[folder].ts": {
+      "maxDuration": 10
+    }
+  }
 }

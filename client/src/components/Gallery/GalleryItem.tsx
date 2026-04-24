@@ -74,9 +74,26 @@ export function GalleryItem({
   const itemRef = focusRef || localRef;
 
   // Get image URL - prefer thumbnailLink for gallery display, then webContentLink
-  const getImageUrl = (): string => {
-    return file.thumbnailLink || file.webContentLink || file.webViewLink || '';
-  };
+  const [currentUrl, setCurrentUrl] = useState<string>(file.thumbnailLink || file.webContentLink || '');
+  const [retryCount, setRetryCount] = useState(0);
+
+  const handleImageError = useCallback(() => {
+    if (retryCount === 0 && file.webContentLink && currentUrl !== file.webContentLink) {
+      // Fallback to webContentLink on first error
+      console.log(`Image error for ${file.name}, falling back to webContentLink`);
+      setCurrentUrl(file.webContentLink);
+      setRetryCount(1);
+    } else if (retryCount < 3) {
+      // Retry a few times with a delay
+      setTimeout(() => {
+        console.log(`Retrying image load for ${file.name} (attempt ${retryCount + 1})`);
+        const url = currentUrl;
+        setCurrentUrl(''); // Force re-render
+        setTimeout(() => setCurrentUrl(url), 10);
+        setRetryCount(prev => prev + 1);
+      }, 1000 * (retryCount + 1));
+    }
+  }, [file.name, file.webContentLink, currentUrl, retryCount]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -190,19 +207,32 @@ export function GalleryItem({
         </div>
 
         {/* Image with skeleton loader */}
-        <div className="image-container">
-          {!imageLoaded && <div className="skeleton-loader" />}
+        <div 
+          className="image-container" 
+          style={{ 
+            position: 'relative',
+            aspectRatio: file.width && file.height ? `${file.width} / ${file.height}` : 'auto',
+            minHeight: !imageLoaded && !file.width ? '200px' : 'auto',
+            backgroundColor: '#f3f4f6',
+            borderRadius: '8px',
+            overflow: 'hidden'
+          }}
+        >
+          {!imageLoaded && <div className="skeleton-loader" style={{ position: 'absolute', inset: 0, zIndex: 1 }} />}
           <img
             ref={imageRef}
-            src={imageUrl}
+            src={currentUrl}
             alt={file.name}
             loading="lazy"
             onLoad={handleImageLoad}
+            onError={handleImageError}
             className={`thumbnail ${imageLoaded ? 'loaded' : ''}`}
             style={{
               width: '100%',
               height: 'auto',
               display: 'block',
+              transition: 'opacity 0.3s ease-in-out',
+              opacity: imageLoaded ? 1 : 0
             }}
           />
         </div>
@@ -235,7 +265,7 @@ export function GalleryItem({
               left: showContextMenu.x,
             }}
           >
-            <button onClick={() => copyImageUrlToClipboard(getImageUrl())}>Copy Image URL</button>
+            <button onClick={() => copyImageUrlToClipboard(currentUrl)}>Copy Image URL</button>
             <button onClick={handleDownload}>Download</button>
             <button onClick={() => window.open(file.webViewLink, '_blank')}>
               Open in Drive
@@ -252,7 +282,7 @@ export function GalleryItem({
               &times;
             </button>
             <img
-              src={imageUrl}
+              src={currentUrl}
               alt={file.name}
               className="full-size-image"
               style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain' }}
