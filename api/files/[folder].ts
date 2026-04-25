@@ -69,7 +69,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { folder: queryFolder, pageSize: pageSizeStr, pageToken } = req.query;
-  const folder = (queryFolder || req.query.folder) as string;
+  let folder = (queryFolder || req.query.folder) as string;
+
+  if (!folder && req.url) {
+    const urlPath = req.url.split('?')[0];
+    const pathSegments = urlPath.split('/').filter(Boolean);
+    folder = pathSegments[pathSegments.length - 1];
+  }
 
   console.log('Request for folder:', folder);
 

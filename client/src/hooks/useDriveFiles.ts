@@ -106,13 +106,20 @@ export function useDriveFiles(_options?: UseDriveFilesOptions): UseDriveFilesEnh
       const url = `/api/files/${apiFolder}?pageSize=${PAGE_SIZE}${currentToken ? `&pageToken=${currentToken}` : ''}`;
 
       const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch files: ${response.status} ${response.statusText}`);
+      
+      let data: ApiResponse | null = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        // Not JSON
       }
 
-      const data: ApiResponse = await response.json();
-      if (!data.success) {
-        throw new Error(data.error || 'API request failed');
+      if (!response.ok) {
+        throw new Error(data?.error || `Failed to fetch files: ${response.status} ${response.statusText}`);
+      }
+
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'API request failed');
       }
 
       const filesArray: ApiFile[] = data.data?.items ?? [];

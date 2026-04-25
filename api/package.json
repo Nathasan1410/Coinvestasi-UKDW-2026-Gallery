@@ -5,6 +5,7 @@
   "dependencies": {
     "@googleapis/drive": "^8.14.0",
     "@vercel/node": "^5.7.12",
-    "archiver": "^7.0.1"
+    "archiver": "^7.0.1",
+    "dotenv": "^17.4.2"
   }
 }
