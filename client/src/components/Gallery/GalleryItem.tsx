@@ -177,8 +177,6 @@ export function GalleryItem({
     return () => document.removeEventListener('click', handleClick);
   }, [handleCloseContextMenu]);
 
-  const imageUrl = getImageUrl();
-
   return (
     <>
       <div
