@@ -85,6 +85,9 @@ export function MasonryLayout({
             display: 'flex',
             flexDirection: 'column',
             gap: `${gap}px`,
+            // Stagger alternating columns to ensure a masonry look 
+            // even if all images are the exact same aspect ratio (like in Canon folder)
+            marginTop: colIndex % 2 !== 0 ? `${gap * 3}px` : '0',
           }}
         >
           {colChildren}
