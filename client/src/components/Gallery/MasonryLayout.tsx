@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface MasonryLayoutProps {
   children: React.ReactNode[];
@@ -9,7 +9,7 @@ interface MasonryLayoutProps {
 }
 
 /**
- * A more robust Masonry layout that balances columns based on item height
+ * A robust Masonry layout that balances columns based on actual aspect ratios
  */
 export function MasonryLayout({
   children,
@@ -20,9 +20,6 @@ export function MasonryLayout({
 }: MasonryLayoutProps) {
   const [columnCount, setColumnCount] = useState(columns);
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Track heights of columns to balance them
-  const [columnHeights, setColumnHeights] = useState<number[]>([]);
 
   useEffect(() => {
     const calculateColumns = () => {
@@ -38,9 +35,7 @@ export function MasonryLayout({
     return () => observer.disconnect();
   }, [columns, minColumnWidth]);
 
-  // Distribute children into columns
-  // We use a simple but effective approach: track the estimated height of each column
-  // and put the next item into the shortest column.
+  // Distribute children into columns using the "Shortest Column First" algorithm
   const columnArrays: React.ReactNode[][] = Array.from({ length: columnCount }, () => []);
   const heights = Array.from({ length: columnCount }, () => 0);
 
@@ -48,37 +43,40 @@ export function MasonryLayout({
     if (!React.isValidElement(child)) return;
 
     // Find the shortest column index
-    let shortestColumnIndex = 0;
+    let shortestIndex = 0;
     for (let i = 1; i < columnCount; i++) {
-      if (heights[i] < heights[shortestColumnIndex]) {
-        shortestColumnIndex = i;
+      if (heights[i] < heights[shortestIndex]) {
+        shortestIndex = i;
       }
     }
 
-    columnArrays[shortestColumnIndex].push(child);
+    columnArrays[shortestIndex].push(child);
 
-    // Estimate height
-    // If the child has a width/height prop from metadata, we use it
-    // Otherwise we use a default estimate
+    // Calculate weight/height for balancing
+    // We look for the file prop which contains width/height metadata from our API
     const file = child.props.file;
     if (file && file.width && file.height) {
-      // ratio = height / width
-      const ratio = file.height / file.width;
-      heights[shortestColumnIndex] += ratio * 300 + 40; // 300 is approx width, 40 for text/padding
+      const aspectRatio = file.height / file.width;
+      // Add relative weight (landscape ~0.6, portrait ~1.5)
+      heights[shortestIndex] += aspectRatio * 100 + 20; 
     } else {
-      heights[shortestColumnIndex] += 300; // Default estimate
+      // Fallback: assume a standard landscape ratio if metadata is missing
+      // We add a tiny bit of "noise" (index % 3) to break perfect grids if meta is missing
+      heights[shortestIndex] += 75 + (heights[shortestIndex] % 3);
     }
   });
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: `${gap}px`,
-    alignItems: 'flex-start',
-    width: '100%',
-  };
-
   return (
-    <div ref={containerRef} className={`masonry-container ${className}`} style={containerStyle}>
+    <div 
+      ref={containerRef} 
+      className={`masonry-container ${className}`} 
+      style={{
+        display: 'flex',
+        gap: `${gap}px`,
+        alignItems: 'flex-start',
+        width: '100%'
+      }}
+    >
       {columnArrays.map((colChildren, colIndex) => (
         <div
           key={colIndex}
