@@ -209,7 +209,7 @@ export function GalleryItem({
           className="image-container" 
           style={{ 
             position: 'relative',
-            aspectRatio: file.width && file.height ? `${file.width} / ${file.height}` : 'auto',
+            aspectRatio: !imageLoaded && file.width && file.height ? `${file.width} / ${file.height}` : 'auto',
             minHeight: !imageLoaded && !file.width ? '200px' : 'auto',
             backgroundColor: '#f3f4f6',
             borderRadius: '8px',

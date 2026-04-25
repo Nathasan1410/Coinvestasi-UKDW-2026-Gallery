@@ -33,18 +33,30 @@ async function listFilesFromFolder(
     q: `'${folderId}' in parents and trashed = false`,
     pageSize,
     pageToken,
-    fields: 'nextPageToken, files(id, name, mimeType, thumbnailLink, webViewLink, webContentLink, size, imageMediaMetadata(width, height), videoMediaMetadata(width, height, durationMillis), createdTime)',
+    fields: 'nextPageToken, files(id, name, mimeType, thumbnailLink, webViewLink, webContentLink, size, imageMediaMetadata(width, height, rotation), videoMediaMetadata(width, height, durationMillis), createdTime)',
     orderBy: 'name asc',
   });
 
   const result = {
-    files: (response.data.files || []).filter(f => f.id && f.name && f.mimeType).map(f => ({
-      ...f,
-      // Extract width/height from metadata if available
-      width: f.imageMediaMetadata?.width || f.videoMediaMetadata?.width,
-      height: f.imageMediaMetadata?.height || f.videoMediaMetadata?.height,
-      duration: f.videoMediaMetadata?.durationMillis,
-    })),
+    files: (response.data.files || []).filter(f => f.id && f.name && f.mimeType).map(f => {
+      let width = f.imageMediaMetadata?.width || f.videoMediaMetadata?.width;
+      let height = f.imageMediaMetadata?.height || f.videoMediaMetadata?.height;
+      const rotation = f.imageMediaMetadata?.rotation;
+
+      // Swap width and height for portrait orientation (1 = 90 deg, 3 = 270 deg)
+      if (rotation === 1 || rotation === 3 || rotation === 90 || rotation === 270) {
+        const temp = width;
+        width = height;
+        height = temp;
+      }
+
+      return {
+        ...f,
+        width,
+        height,
+        duration: f.videoMediaMetadata?.durationMillis,
+      };
+    }),
     nextPageToken: response.data.nextPageToken || undefined,
   };
 
